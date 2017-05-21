@@ -1,0 +1,97 @@
+<html>
+ <head>
+  <link rel="stylesheet" type="text/css" href="/stylesheet.css"/>
+  <script language="JavaScript">
+   <!--
+function addText(input, insText) {
+ input.focus();
+ if (input.createTextRange) {
+   document.selection.createRange().text += insText;
+ } else if (input.setSelectionRange) {
+   var start = input.selectionStart;
+   var end = input.selectionEnd;
+   var len = insText.length;
+   input.value =
+     input.value.substr(0, start) + insText + input.value.substr(end);
+   input.setSelectionRange(start+len, start+len);
+ } else {
+   input.value += insText;
+ }
+}
+function insertCode(text)
+{
+   var source = document.getElementById("source");
+   addText(source, text);
+}
+   -->
+  </script>
+  <title>Editing "%(pagename)s"</title>
+ </head>
+ <body>
+  <table class="all" cols="1" rows="1" align="center"><tr><td>
+   <h1 class="logo" align="center">
+    <a href="/">
+     <img src="/images/small-logo.png" alt="Nifki" style="float:left;"/>
+    </a>
+    Editing "%(pagename)s"
+   </h1>
+   %(errormessage)s
+   <form
+    method="post"
+    action="/pages/%(pagename)s/save"
+    enctype="multipart/form-data"
+   >
+    <table cols="4" rows="4" align="center"><tr>
+     <td colspan="4" align="center">
+      <p>Type the program in here:</p>
+      <textarea
+       id="source" name="source"
+       rows="30" cols="80"
+      >%(source)s</textarea>
+     </td>
+    </tr><tr>
+     <td align="left">
+      Width in pixels:
+      <input name="width" value="%(width)s" size="5" maxlength="5"/>
+     </td>
+     <td align="left">
+      Height in pixels:
+      <input name="height" value="%(height)s" size="5" maxlength="5"/>
+     </td>
+     <td align="left">
+      Milliseconds per frame:
+      <input name="msPerFrame" value="%(msPerFrame)s" size="5" maxlength="5"/>
+     </td>
+     <td align="right">
+      <input type="checkbox" name="debug" value="debug" %(debugChecked)s/>
+      Show debug output
+     </td>
+    </tr><tr>
+     <td colspan="4" align="left">
+      Tag line:
+      <input name="name" value="%(name)s" size="80"/>
+     </td>
+    </tr><tr>
+     <td colspan="4" align="right">
+      <input type="submit" name="save" accesskey="S" value="Save as"/>
+      <input name="newpage" value="%(newpage)s" size="10" maxlength="20"/>
+     </td>
+    </tr></table>
+    <p style="margin-right: 10px;" align="right">
+     <a href="/pages/%(pagename)s/play/">Cancel changes</a>
+    </p>
+    <div id="gameSprites">
+     <h2 align="center">Pictures attached to this page</h2>
+%(imagelist)s
+     Upload image:
+     <input
+      type="file" accept="image/png"
+      name="uploadedImage" value="%(uploadedImage)s"
+      size="60"
+     />
+     <input type="submit" name="upload" accesskey="U" value="Upload"/>
+    </div>
+   </form>
+  </td></tr></table>
+ </body>
+</html>

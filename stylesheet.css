@@ -1,0 +1,47 @@
+body {
+  background: #333;
+  color: #ccc;
+  font-family: sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: sans-serif;
+  font-variant: small-caps;
+  letter-spacing: 0.1em;
+}
+
+a:link { color: #99f; }
+a:visited { color: #c9f; }
+
+/* The whole page is wrapped in a 1-cell table which
+ * shrink-wraps around the content. */
+table.all {
+  margin: 10px auto;
+  padding: 20px 10px;
+  border: 3px solid #ccc;
+  -moz-border-radius: 10px
+}
+
+h1.logo {
+  margin-right: 159px; /* Symmetric to the Nifki logo. */
+  margin-bottom: 20px;
+}
+h1.logo img {
+  padding-right: 30px; /* Stops the logo touching the heading. */
+  border: none;
+}
+
+form td { padding: 10px 5px; }
+
+pre {
+  padding: 5px 2em;
+  background: #666;
+  color: #fff;
+}
+
+p.error {
+  padding: 5px 2em;
+  background: #666;
+  border: 3px solid #ccc;
+  color: #fff;
+}

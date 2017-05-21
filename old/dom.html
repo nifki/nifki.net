@@ -1,0 +1,118 @@
+<html>
+ <head>
+  <script language="JavaScript">
+   <!--
+function addText(input, insText) {
+ input.focus();
+ if (input.createTextRange) {
+   document.selection.createRange().text += insText;
+ } else if (input.setSelectionRange) {
+   var start = input.selectionStart;
+   var end = input.selectionEnd;
+   var len = insText.length;
+   input.value =
+     input.value.substr(0, start) + insText + input.value.substr(end);
+   input.setSelectionRange(start+len, start+len);
+ } else {
+   input.value += insText;
+ }
+}
+function insertCode(text)
+{
+   var source = document.getElementById("source");
+   addText(source, text);
+}
+   -->
+  </script>
+  <style type="text/css">
+   <!--
+div#textEdit {
+   width: 700px;
+   height: 740px;
+   padding: 8px;
+   margin-left: 200px;
+   margin-top: 8px;
+   border: 1px solid black;
+}
+
+div#gameSprites {
+   float: left;
+   width: 180px;
+   height: 300px;
+   margin-left: 8px;
+   overflow: scroll;
+   border: 1px solid black;
+}
+
+div#gameSprites div {
+   height: 48px;
+   border-bottom: 1px solid lightgrey;
+}
+div.gameSpriteStriped {
+   background-color: lightblue;
+}
+
+div.gameSpriteUnstriped {
+  background-color: white;
+}
+
+span.gameSpriteLabel {
+   text-align: center;
+   font-weight: bold;
+   position: relative;
+   top: 0px;
+   left: 8px;
+}
+
+img.gameSprite {
+   position: relative;
+   top: 8px;
+   left: 8px;
+}
+   -->
+  </style>
+  <title>Editing "%(pagename)s"</title>
+ </head>
+ <body>
+  <div id="gameSprites">
+   <div class="gameSpriteStriped" onclick="insertCode('Player');">
+    <img class="gameSprite" src="/sprites/player.png" width="32" height="32" alt="player"/>
+    <span class="gameSpriteLabel">Player</span>
+   </div>
+   <div class="gameSpriteUnstriped" onclick="insertCode('Rock');">
+    <img class="gameSprite" src="/sprites/rock.png" width="32" height="32" alt="rock"/>
+    <span class="gameSpriteLabel">Rock</span>
+   </div>
+   <div class="gameSpriteStriped" onclick="insertCode('Player');">
+    <img class="gameSprite" src="/sprites/player.png" width="32" height="32" alt="player"/>
+    <span class="gameSpriteLabel">Player</span>
+   </div>
+   <div class="gameSpriteUnstriped" onclick="insertCode('Rock');">
+    <img class="gameSprite" src="/sprites/rock.png" width="32" height="32" alt="rock"/>
+    <span class="gameSpriteLabel">Rock</span>
+   </div>
+   <div class="gameSpriteStriped" onclick="insertCode('Player');">
+    <img class="gameSprite" src="/sprites/player.png" width="32" height="32" alt="player"/>
+    <span class="gameSpriteLabel">Player</span>
+   </div>
+   <div class="gameSpriteUnstriped" onclick="insertCode('Rock');">
+    <img class="gameSprite" src="/sprites/rock.png" width="32" height="32" alt="rock"/>
+    <span class="gameSpriteLabel">Rock</span>
+   </div>
+   <div class="gameSpriteStriped" onclick="insertCode('Player');">
+    <img class="gameSprite" src="/sprites/player.png" width="32" height="32" alt="player"/>
+    <span class="gameSpriteLabel">Player</span>
+   </div>
+   <div class="gameSpriteUnstriped" onclick="insertCode('Rock');">
+    <img class="gameSprite" src="/sprites/rock.png" width="32" height="32" alt="rock"/>
+    <span class="gameSpriteLabel">Rock</span>
+   </div>
+  </div>
+  <div id="textEdit">
+   <form method="post" action="/pages/Text/save">
+    <p><textarea id="source" name="source" rows="40" cols="80"></textarea></p>
+    <p><input type="submit" name="save" value="Save changes"/></p>
+   </form>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,12 @@
+Cacheing bug: Opera caches the edit page and shows old source code with new
+changes lost.
+
+If you upload an image and then hit reload, the server hangs. This is a known
+bug. It is mentioned here: http://www.cherrypy.org/wiki/FileUpload . A test is
+also suggested there. Not clear what to do about it, though.
+
+Reloading and deleting images.
+
+Move ~/python/nifki to ~/srv/nifki and fix the various "makeJar" 
+scripts.
+

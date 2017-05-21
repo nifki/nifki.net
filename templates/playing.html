@@ -1,0 +1,36 @@
+<html>
+ <head>
+  <link rel="stylesheet" type="text/css" href="/stylesheet.css"/>
+  <title>%(pagename)s</title>
+ </head>
+ <body>
+  <table class="all" cols="1" rows="1" align="center"><tr><td>
+   <h1 class="logo" align="center">
+    <a href="/">
+     <img src="/images/small-logo.png" alt="Nifki" style="float:left;"/>
+    </a>
+    %(pagename)s
+   </h1>
+   <br />
+   <p align="center">%(name)s</p>
+   <center>
+    <applet
+      style="margin: 20px;"
+      codebase="/"
+      code="org.sc3d.apt.crazon.vm.NifkiApplet.class"
+      archive="nifki-lib.jar, pages/%(pagename)s/%(random)s.jar"
+      width="%(width)d"
+      height="%(height)d"
+    >
+     There should be a Java applet here. Please check you've got a recent
+     version of Java (at least version 1.3) installed and switched on.
+    </applet>
+   </center>
+   <table cols="2" rows="1" width="100%%"><tr><td align="left">
+    <a href="/pages/%(pagename)s/edit/">Edit</a> this game.
+   </td><td align="right">
+    Return to the <a href="/pages/">list of pages.</a>
+   </td></tr></table>
+  </td></tr></table>
+ </body>
+</html>

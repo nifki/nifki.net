@@ -1,0 +1,297 @@
+# A maze game.
+
+LOOP;
+  TRUE
+WHILE;
+  LOAD(Rocks_playUntilWin)
+  TABLE
+    0 TABLE
+      0  "################" PUT
+      1  "#AOO: O:O :OO+O#" PUT
+      2  "#+:#<>+<>+<>+O+#" PUT
+      3  "#+#+OO>OO>OO>+O#" PUT
+      4  "#+#OO<O++#++#O+#" PUT
+      5  "#+#O< + +#++#+O#" PUT
+      6  "#+#O#:+:<:++#O+#" PUT
+      7  "#+#+ >:<>##:#+O#" PUT
+      8  "#+#:#   O O:#O+#" PUT
+      9  "#+#:#::O:<O>O+O#" PUT
+      10 "#+#:> O:<OOO>O+#" PUT
+      11 "#+#::>:<+:++#+O#" PUT
+      12 "#+>::::+#:++#O+#" PUT
+      13 "#+:>##:#O##:<+O#" PUT
+      14 "#::::::::::::::#" PUT
+      15 "################" PUT
+      PUT
+  CALL DROPTABLE;
+  LOAD(Rocks_playUntilWin)
+  TABLE
+    0 TABLE
+      0 "########" PUT
+      1 "#A+++++#" PUT
+      2 "#++++++#" PUT
+      3 "#++++++#" PUT
+      4 "#++++++#" PUT
+      5 "#++++++#" PUT
+      6 "#++++++#" PUT
+      7 "########" PUT
+      PUT
+  CALL DROPTABLE;
+  "Well done! Back to the beginning..." DUMP;
+NEXT;
+ELSE;
+
+DEF(Rocks_playUntilWin)
+  LSTORE(ARGS);
+  LLOAD(ARGS) 0 GET LSTORE(map);
+  LOOP;
+    LOAD(Rocks_playLevel) TABLE 0 LLOAD(map) PUT CALL
+    NOT
+  WHILE; NEXT; ELSE;
+  TABLE RETURN;
+
+DEF(Rocks_playLevel)
+  LSTORE(ARGS);
+  LLOAD(ARGS) 0 GET LSTORE(map);
+  WINDOW LSTORE(TEMP); LLOAD(TEMP) 8 SET(W); LLOAD(TEMP) 8 SET(H);
+  TABLE LSTORE(pictures);
+  LLOAD(pictures) " " LOAD(Rocks_blankPNG) PUT LSTORE(pictures);
+  LLOAD(pictures) "A" LOAD(Rocks_blankPNG) PUT LSTORE(pictures);
+  LLOAD(pictures) ":" LOAD(Rocks_earthPNG) PUT LSTORE(pictures);
+  LLOAD(pictures) "+" LOAD(Rocks_diamondPNG) PUT LSTORE(pictures);
+  LLOAD(pictures) "O" LOAD(Rocks_rockPNG) PUT LSTORE(pictures);
+  LLOAD(pictures) "#" LOAD(Rocks_wallPNG) PUT LSTORE(pictures);
+  LLOAD(pictures) "<" LOAD(Rocks_leftPNG) PUT LSTORE(pictures);
+  LLOAD(pictures) ">" LOAD(Rocks_rightPNG) PUT LSTORE(pictures);
+  TABLE LSTORE(bgSprites);
+  0 LSTORE(numDiamonds);
+
+  LLOAD(map) FOR LSTORE(row) LSTORE(y);
+    LLOAD(bgSprites) LLOAD(y) TABLE PUT LSTORE(bgSprites);
+    LLOAD(row) FOR LSTORE(char) LSTORE(x);
+      LLOAD(pictures) LLOAD(char) GET SPRITE LSTORE(TEMP);
+      LLOAD(TEMP) 1 SET(W); LLOAD(TEMP) 1 SET(H);
+      LLOAD(TEMP) LSTORE(sprite);
+      LLOAD(sprite) LSTORE(TEMP);
+      LLOAD(TEMP) LLOAD(x) SET(X);
+      LLOAD(TEMP) LLOAD(y) SET(Y);
+      LLOAD(bgSprites) LLOAD(y) DGET LLOAD(x) LLOAD(sprite) PUT PUT LSTORE(bgSprites);
+      LLOAD(char) "A" == IF;
+        LLOAD(x) LSTORE(manX);
+        LLOAD(y) LSTORE(manY);
+      THEN;
+        LLOAD(char) "+" == IF;
+          LLOAD(numDiamonds) 1 + LSTORE(numDiamonds);
+        THEN;
+        ELSE;
+      ELSE;
+    NEXT;
+    ELSE;
+  NEXT;
+  ELSE;
+  
+  LLOAD(numDiamonds) DUMP; " diamonds to collect\A/" DUMP;
+
+  LOAD(Rocks_manPNG) SPRITE LSTORE(TEMP);
+  LLOAD(TEMP) 1 SET(W); LLOAD(TEMP) 1 SET(H);
+  LLOAD(TEMP); LSTORE(man);
+
+  0 LSTORE(dx);
+  0 LSTORE(dy);
+  0 LSTORE(manCount);
+  0 LSTORE(bgCount);
+  FALSE LSTORE(manDead);
+
+# Gave up hand compiling here.
+
+  WHILE numDiamonds > 0 AND NOT manDead {
+    # Display a frame.
+    MOVE man TO (manX - dx*manCount, manY - dy*manCount)
+    MOVE WINDOW TO (man.X - 3.5, man.Y - 3.5)
+    SET WINDOW.B = bgCount * 0.05
+    WAIT
+
+    # Read the keyboard, if the man is exactly in a square.
+    IF manCount == 0 {
+      dx = 0
+      dy = 0
+      IF KEYS.LeftArrow  { dx = dx - 1 }
+      IF KEYS.RightArrow { dx = dx + 1 }
+      IF KEYS.UpArrow    { dy = dy - 1 }
+      IF KEYS.DownArrow  { dy = dy + 1 }
+      IF dy != 0 { dx = 0 }
+
+      # Check what we're about to hit.
+      aheadSprite = bgSprites[manY+dy][manX+dx]
+      ahead = aheadSprite.Picture
+
+      # Is it a diamond?
+      IF ahead == diamondPNG {
+        numDiamonds = numDiamonds - 1
+        DUMP numDiamonds DUMP " diamonds left\A/"
+        bgCount = 20
+      }
+
+      # Is it a rock?
+      IF ahead == rockPNG {
+        # Check what we're pushing it into.
+        IF dy == 0 AND bgSprites[manY][manX + 2*dx].Picture == blankPNG {
+          # Push succeeds.
+          SET bgSprites[manY][manX + 2*dx].Picture = rockPNG
+        } ELSE {
+          # Push fails.
+          dx = 0
+          dy = 0
+        }
+      }
+
+      # Is it a wall?
+      IF isWall(ahead) {
+        dx = 0
+        dy = 0
+      }
+
+      # Does the man move?
+      IF dx != 0 OR dy != 0 {
+        manX = manX + dx
+        manY = manY + dy
+        manCount = 1.0
+        # Overwrite the square ahead with a blank.
+        SET aheadSprite.Picture = blankPNG
+      }
+    }
+
+    # Move the man.
+    IF manCount > 0.0 {
+      manCount = manCount - 0.25
+    }
+
+    # Fade the background.
+    IF bgCount > 0 {
+      bgCount = bgCount - 1
+    }
+
+    # Scan for rocks.
+    manDead = moveRocks(manX, manY, dx, dy, bgSprites)
+  }
+
+  CLS
+  bgSprites = [] # Helps the garbage collector.
+  
+  IF numDiamonds == 0 {
+    celebrate(diamondPNG)
+    RETURN TRUE
+  } ELSE {
+    celebrate(rockPNG)
+    RETURN FALSE
+  }
+}
+
+# Move all the falling rocks.
+# Returns 'TRUE' if the man dies, otherwise 'FALSE'.
+DEF moveRocks(manX, manY, dx, dy, bgSprites) {
+  # This array of flags is used to ensure rocks only move once each frame.
+  isMoving = []
+  FOR x= IN map[0] { isMoving[x] = FALSE }
+  
+  # Scan for rocks.
+  FOR y=row IN bgSprites {
+    FOR x=rockSprite IN row {
+      IF rockSprite.Picture == rockPNG {
+        IF isMoving[x] {
+          isMoving[x] = FALSE
+        } ELSE {
+          rowBelow = bgSprites[y+1]
+          belowSprite = rowBelow[x]
+          destX = x
+          below = belowSprite.Picture
+          IF isLeft(below) AND row[x-1].Picture == blankPNG {
+            # It could fall left.
+            destX = x - 1
+          }
+          IF isRight(below) AND row[x+1].Picture == blankPNG {
+            # It could fall right.
+            destX = x + 1
+          }
+          # Is there anything in the way?
+          destSprite = rowBelow[destX]
+          IF ( # Moving into a blank.
+            destSprite.Picture == blankPNG
+          ) AND ( # The man is not in the way.
+            (destX != manX-dx AND destX != manX) OR 
+            (y + 1 != manY AND y != manY)
+          ) {
+            # Move the rock.
+            SET rockSprite.Picture = blankPNG
+            SET destSprite.Picture = rockPNG
+            isMoving[x] = TRUE
+            # Does it squash the man?
+            IF destX = manX AND (y + 1 == manY OR y + 2 == manY) {
+              RETURN TRUE
+            }
+          }
+        }
+      }
+    }
+  }
+  RETURN FALSE
+}
+
+# Define some useful tests.
+DEF isWall(pic) {
+  IF pic == wallPNG { RETURN TRUE }
+  IF pic == leftPNG { RETURN TRUE }
+  IF pic == rightPNG { RETURN TRUE }
+  RETURN FALSE
+}
+
+DEF isLeft(pic) {
+  IF pic == diamondPNG { RETURN TRUE }
+  IF pic == rockPNG { RETURN TRUE }
+  IF pic == leftPNG { RETURN TRUE }
+  RETURN FALSE
+}
+
+DEF isRight(pic) {
+  IF pic == diamondPNG { RETURN TRUE }
+  IF pic == rockPNG { RETURN TRUE }
+  IF pic == rightPNG { RETURN TRUE }
+  RETURN FALSE
+}
+
+# Runs a little celebration animation.
+DEF celebrate(picture) {
+  MOVE WINDOW TO (0, 0)
+  WINDOW.B = 0.0
+
+  sparks = []
+  FOR count= IN 100 {
+    sparks[count] = [
+      x = 3.5,
+      y = 3.5,
+      dx = (RANDOM - 0.5) * 1,
+      dy = (RANDOM - 0.5) * 1,
+      sprite = SPRITE picture SIZE (1, 1)
+    ]
+  }
+
+  WHILE NOT KEYS.Space {
+    count = (count + 1) % 100
+    HIDE sparks[count].sprite
+    sparks[count] = [
+      x = 3.5
+      y = 3.5
+      dx = (RANDOM - 0.5) * 1
+      dy = (RANDOM - 0.5) * 1
+      sprite = SPRITE picture SIZE (1, 1)
+    ]
+    FOR i=spark IN sparks {
+      spark.x = spark.x + spark.dx
+      spark.y = spark.y + spark.dy
+      spark.dy = spark.dy + 0.01
+      MOVE spark.sprite TO (spark.x, spark.y)
+      sparks[i] = spark
+    }
+    WAIT
+  }
+}
