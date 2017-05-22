@@ -1,8 +1,14 @@
+{% extends "base-template.html" %}
+{% block title %}List of all pages{% endblock %}
+{% block body %}
     <p align="center">
      Here is the complete list of all Nifki pages written so far:
     </p>
      <table align="center"><tr><td>
       <ul>
-%(pagenames)s
+{%- for page in pagenames %}
+       <li><a href="/pages/{{ page }}/play/">{{ page }}</a></li>
+{%- endfor %}
       </ul>
      </td></tr></table>
+{% endblock %}
