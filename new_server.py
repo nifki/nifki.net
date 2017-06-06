@@ -18,6 +18,7 @@ import flask
 
 from flask import Flask, redirect, url_for, request, render_template
 from werkzeug.exceptions import NotFound, BadRequestKeyError
+from werkzeug.routing import UnicodeConverter
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField
 from wtforms import (
@@ -58,14 +59,17 @@ set_app_secret_key(app)
 def error_bad_request(exc):
     if isinstance(exc, BadRequestKeyError):
         (key,) = exc.args
-        return http_error(400, 'Missing key: %s' % (key,))
+        return http_error(400, "Missing key: %s" % (key,))
     else:
-        return http_error(400, 'Bad request')
+        return http_error(400, "Bad request")
 
 
 @app.errorhandler(404)
 def error_not_found(exc):
-    return http_error(404, 'Not found')
+    if isinstance(exc, BadPageName):
+        return http_error(404, "Bad page name '%s'" % (exc.bad_name,))
+    else:
+        return http_error(404, "Not found")
 
 
 def read_file(filename):
@@ -247,6 +251,23 @@ def is_valid_page_name(pagename):
     return True
 
 
+class BadPageName(NotFound):
+    def __init__(self, bad_name):
+        super(BadPageName, self).__init__("Bad page name")
+        self.bad_name = bad_name
+
+
+class PageNameConverter(UnicodeConverter):
+    def to_python(self, value):
+        if is_valid_page_name(value):
+            return value
+        else:
+            raise BadPageName(value)
+
+
+app.url_map.converters['PageName'] = PageNameConverter
+
+
 @app.route('/')
 def index():
     return render_template("welcome-to-nifki.html")
@@ -261,36 +282,24 @@ def pages_index():
         "list-of-all-pages.html", pagenames=sorted(pagenames))
 
 
-def check_pagename(pagename):
-    if not is_valid_page_name(pagename):
-        # Don't include the page name in the HTTP exception message,
-        # in case any newlines etc. in it go into the response.
-        raise NotFound(
-            "Bad page name",
-            http_error(404, "Bad page name '%s'" % pagename))
-
-
-@app.route('/pages/<pagename>/')
+@app.route('/pages/<PageName:pagename>/')
 def page_index(pagename):
     return redirect("/pages/%s/play/" % pagename)
 
 
-@app.route('/pages/<pagename>/res/<filename>')
+@app.route('/pages/<PageName:pagename>/res/<PageName:filename>')
 def page_resource(pagename, filename):
-    check_pagename(pagename)
-    check_pagename(filename)
     data = read_file("wiki/%s/res/%s" % (pagename, filename))
     return flask.Response(data, 200, content_type="image/png")
 
 
-@app.route('/pages/<pagename>/<_anything>.jar')
+@app.route('/pages/<PageName:pagename>/<_anything>.jar')
 def jar(pagename, _anything):
     """
     Returns the jar file for this page. Note that the requested filename is
     completely ignored. In fact, we vary the filename in order to defeat the
     browser cache.
     """
-    check_pagename(pagename)
     jarfile = read_file("wiki/nifki-out/%s.jar" % (pagename,))
     response = flask.Response(jarfile, 200, {
         "Content-Type": "application/java-archive"})
@@ -302,14 +311,13 @@ def jar(pagename, _anything):
     return response
 
 
-@app.route('/pages/<pagename>/play/')
+@app.route('/pages/<PageName:pagename>/play/')
 def play(pagename):
     """
     Returns the page with the applet tag on it, if the game compiled
     successfully, otherwise returns a page showing the compiler output,
     or redirects to the edit page if the compiler hasn't run for this game.
     """
-    check_pagename(pagename)
     if os.path.exists("wiki/nifki-out/%s.jar" % pagename):
         props = GameProperties.load("wiki/%s/properties.txt" % pagename)
         return render_template("playing.html",
@@ -331,9 +339,8 @@ def play(pagename):
         return redirect(url_for('edit', pagename=pagename))
 
 
-@app.route('/pages/<pagename>/edit/')
+@app.route('/pages/<PageName:pagename>/edit/')
 def edit(pagename):
-    check_pagename(pagename)
     if not os.path.isdir("wiki/%s/" % pagename):
         return render_template("no-such-page.html", pagename=pagename)
     # Load "source.sss" file.
@@ -360,9 +367,8 @@ def edit_page(pagename, form):
         uploadedImage=''))
 
 
-@app.route('/pages/<pagename>/save/', methods=['POST'])
+@app.route('/pages/<PageName:pagename>/save/', methods=['POST'])
 def save(pagename):
-    check_pagename(pagename)
     form, props = GameProperties.check_save_changes_form(pagename)
     newpage = form.newpage.data
     source = form.source.data
