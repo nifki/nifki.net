@@ -45,37 +45,37 @@ function insertCode(text)
     enctype="multipart/form-data"
    >
     {{ form.csrf_token }}
-    <table cols="4" rows="4" align="center"><tr>
+    <table align="center"><tr>
      <td colspan="4" align="center">
       <p>Type the program in here:</p>
-      {{ form.source(rows="30", cols="80", widget="textarea") }}
+      <textarea name="source" rows="30" cols="80">{{ form.source }}</textarea>
      </td>
     </tr><tr>
      <td align="left">
       Width in pixels:
-      {{ form.width(size="5", maxlength="5") }}
+      <input type="text" name="width" size="5" maxlength="5" value="{{ form.width }}" />
      </td>
      <td align="left">
       Height in pixels:
-      {{ form.height(size="5", maxlength="5") }}
+      <input type="text" name="height" size="5" maxlength="5" value="{{ form.height }}" />
      </td>
      <td align="left">
       Milliseconds per frame:
-      {{ form.msPerFrame(size="5", maxlength="5") }}
+      <input type="text" name="msPerFrame" size="5" maxlength="5" value="{{ form.msPerFrame }}" />
      </td>
      <td align="right">
-      {{ form.debug() }}
+      <input type="checkbox" name="debug" {% if form.debug %}checked="checked"{% endif %} />
       Show debug output
      </td>
     </tr><tr>
      <td colspan="4" align="left">
       Tag line:
-      {{ form.name(size="80") }}
+      <input type="text" name="name" size="80" value="{{ form.name }}" />
      </td>
     </tr><tr>
      <td colspan="4" align="right">
       <input type="submit" name="save" accesskey="S" value="Save as"/>
-      {{ form.newpage(size="10", maxlength="20") }}
+      <input type="text" name="newpage" size="10" maxlength="20" value="{{ form.newpage }}" />
      </td>
     </tr></table>
     <p style="margin-right: 10px;" align="right">
@@ -104,8 +104,8 @@ function insertCode(text)
     </table>
 {% endif %}
      Upload image:
-     {{ form.uploadedImage(accept="image/png", size="60") }}
-     {{ form.upload(value="Upload", accesskey="U") }}
+     <input type="file" name="uploadedImage" accept="image/png" size="60" />
+     <input type="submit" name="upload" value="Upload" accesskey="U" />
     </div>
    </form>
   </td></tr></table>

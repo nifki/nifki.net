@@ -6,7 +6,6 @@ import errno
 import logging
 import os
 import pipes
-import re
 import shutil
 import string
 import subprocess
@@ -15,15 +14,15 @@ import textwrap
 import time
 
 import flask
+import marshmallow
 
 from flask import Flask, redirect, url_for, request, render_template
+from marshmallow import ValidationError
 from werkzeug.exceptions import NotFound, BadRequestKeyError
 from werkzeug.routing import UnicodeConverter
-from flask_wtf import FlaskForm
-from flask_wtf.file import FileField
-from wtforms import (
-    StringField, TextAreaField, IntegerField, BooleanField, SubmitField)
-from wtforms.validators import InputRequired, ValidationError
+
+
+# TODO: Make all filesystem paths absolute or use chdir.
 
 
 class Utf8Response(flask.Response):
@@ -101,71 +100,91 @@ def http_error(code, message):
     return Utf8Response(render_template("error.html", message=message), code)
 
 
-class SaveChangesForm(FlaskForm):
-    name = StringField('name', validators=[])
-    width = IntegerField('width', validators=[InputRequired()])
-    height = IntegerField('height', validators=[InputRequired()])
-    msPerFrame = IntegerField('msPerFrame', validators=[InputRequired()])
-    debug = BooleanField('debug', validators=[])
-    source = TextAreaField('source', validators=[InputRequired()])
-    newpage = StringField('newpage', validators=[InputRequired()])
-    upload = SubmitField('upload', validators=[])
-    uploadedImage = FileField('uploadedImage', validators=[])
+class SaveChangesSchema(marshmallow.Schema):
+    class Meta:
+        ordered = True  # Needed so list(schema.fields) is ordered.
 
-    def __init__(self, pagename, *args, **kwargs):
-        super(SaveChangesForm, self).__init__(*args, **kwargs)
+    name = marshmallow.fields.String()
+    width = marshmallow.fields.Integer(required=True)
+    height = marshmallow.fields.Integer(required=True)
+    msPerFrame = marshmallow.fields.Integer(required=True)
+    debug = marshmallow.fields.Boolean(missing=False)
+    source = marshmallow.fields.String(required=True)
+    newpage = marshmallow.fields.String(required=True)
+    upload = marshmallow.fields.Boolean(missing=False)
+
+    debug.truthy = ['on']
+    debug.falsy = ['off']
+    upload.truthy = ['Upload']
+
+    def __init__(self, pagename, strict=False):
+        super(SaveChangesSchema, self).__init__(strict=strict)
         self.pagename = pagename
-        self.image_data = None
 
-    def first_error(self):
-        if self.width.errors or self.height.errors or self.msPerFrame.errors:
-            return "The width, height and frame rate must all be integers."
-        for field in iter(self):
-            if field.errors:
-                return next(iter(field.errors))
-
-    def has_upload(self):
-        return self.upload.data
-
-    def validate_newpage(self, field):
-        newpage = field.data
-        if newpage == self.pagename:
-            pass  # Unchanged.
-        elif not is_valid_page_name(newpage):
+    @marshmallow.validates('newpage')
+    def validate_newpage(self, newpage):
+        if not is_valid_page_name(newpage):
             raise ValidationError(
                 "Your changes have not been saved because '%s' is "
                 "not allowed as a page name. Page names must start with a "
                 "letter, must contain only letters and digits, must not be "
                 "entirely capital letters, and must have at least three "
                 "characters and at most twenty." % newpage)  # TODO: >20?
-        elif os.path.isdir("wiki/%s/" % newpage):
+        if newpage != self.pagename and os.path.isdir("wiki/%s/" % newpage):
             raise ValidationError(
                 "Your changes have not been saved because a page called "
                 "'%s' already exists." % newpage)
 
-    def validate_uploadedImage(self, field):
-        if not self.has_upload():
-            return
-        uploadedImage = request.files['uploadedImage']
-        if not uploadedImage:
+    @staticmethod
+    def validate_uploadedImage():
+        if not request.files.get('uploadedImage'):
             raise ValidationError("Upload file not provided.")
-        self.image_data = uploadedImage.read(102400)
-        if len(self.image_data) < 4  or  self.image_data[1:4] != "PNG":
+        image_data = request.files['uploadedImage'].read(102400)
+        if len(image_data) < 8 or image_data[:8] != b'\x89PNG\r\n\x1a\n':
             raise ValidationError("Images must be in PNG format.")
-        if len(self.image_data) >= 102400:
+        if len(image_data) >= 102400:
             raise ValidationError("Image files must be smaller than 100K.")
+        return image_data
+
+    @staticmethod
+    def first_error(form):
+        if any(x in form.errors for x in ['width', 'height', 'msPerFrame']):
+            return "The width, height and frame rate must all be integers."
+        for field in SaveChangesSchema.FIELDS:
+            if field in form.errors:
+                error_msg = next(iter(form.errors[field]))
+                return '{0}: {1}'.format(field, error_msg)
+        if 'uploadedImage' in form.errors:
+            return next(iter(form.errors['uploadedImage']))
+
+SaveChangesSchema.FIELDS = list(SaveChangesSchema('dummy').fields)
 
 
-game_property_types = collections.OrderedDict([
-    ('name', unicode),  # This is actually the tagline.
-    ('width', int),
-    ('height', int),
-    ('msPerFrame', int),
-    ('debug', bool),
-])
-class GameProperties(collections.namedtuple(
-    '_GameProperties', ' '.join(game_property_types)
-)):
+class GamePropertiesSchema(marshmallow.Schema):
+    class Meta:
+        ordered = True
+
+    name = marshmallow.fields.String()
+    width = marshmallow.fields.Integer(missing=256)
+    height = marshmallow.fields.Integer(missing=256)
+    msPerFrame = marshmallow.fields.Integer(missing=40)
+    debug = marshmallow.fields.Boolean(missing=False)
+
+    debug.truthy = ['true']
+    debug.falsy = ['false']
+
+    @marshmallow.post_load
+    def make_props(self, data):
+        return GameProperties(**data)
+
+
+class GameProperties(collections.namedtuple('GameProperties', '''
+    name
+    width
+    height
+    msPerFrame
+    debug
+''')):
     @staticmethod
     def load(filename):
         """
@@ -173,61 +192,52 @@ class GameProperties(collections.namedtuple(
         as a GameProperties. This is used, for example, to retrieve the width
         and height of a game for inclusion in the applet tag.
         """
-        result = dict(
-            name="", width="256", height="256", msPerFrame="40", debug="false")
+        data = {}
         for line in read_utf8(filename).split("\n"):
             line = line.strip()
             if line and not line.startswith('#'):
                 colon = line.find(":")
                 if colon == -1:
-                    raise ValueError("Colon missing from '" + line + "'")
+                    raise ValueError("Colon missing from '{0}'".format(line))
                 key, value = line[:colon], line[colon + 1:]
-                result[key] = value.strip()
-        return GameProperties(**result)
+                data[key] = value.strip()
+        return GamePropertiesSchema(strict=True).load(data).data
 
     def save(self, filename):
-        def encode(value):
-            if isinstance(value, bool):
-                return ['false', 'true'][value]
-            else:
-                return unicode(value)
+        file_contents = (
+            'name: {name}\n'
+            'width: {width}\n'
+            'height: {height}\n'
+            'msPerFrame: {msPerFrame}\n'
+            'debug: {debug}\n'
+        ).format(
+            name=self.name,
+            width=self.width,
+            height=self.height,
+            msPerFrame=self.msPerFrame,
+            debug='true' if self.debug else 'false',
+        )
+        write_utf8(filename, file_contents)
 
-        lines = []
-        for key in game_property_types:
-            value = getattr(self, key)
-            lines.append("%s: %s\n" % (key, encode(value)))
 
-        write_utf8(filename, ''.join(lines))
-
-    def to_form(self, pagename, newpage, source):
-        data = {}
-        data['newpage'] = newpage
-        data['source'] = source
-        for key in game_property_types:
-            value_str = getattr(self, key)
-            key_type = game_property_types[key]
-            if key_type is bool:
-                data[key] = {'true': True, 'false': False}[value_str]
-            elif key_type is int:
-                data[key] = int(value_str)
-            else:
-                assert key_type is unicode
-                data[key] = value_str
-        return SaveChangesForm(pagename, formdata=None, data=data)
-
-    @staticmethod
-    def check_save_changes_form(pagename):
-        form = SaveChangesForm(pagename)
-        if form.validate_on_submit():
-            props = GameProperties(
-                name=form.name.data,
-                width=form.width.data,
-                height=form.height.data,
-                msPerFrame=form.msPerFrame.data,
-                debug=form.debug.data)
-        else:
-            props = None
-        return (form, props)
+def check_save_changes_form(pagename):
+    schema = SaveChangesSchema(pagename, strict=False)
+    form = schema.load(request.form)
+    if not form.errors and form.data['upload']:
+        try:
+            form.data['image_data'] = schema.validate_uploadedImage()
+        except ValidationError as e:
+            form.errors['uploadedImage'] = [e]
+    if form.errors:
+        props = None
+    else:
+        props = GameProperties(
+            name=form.data['name'],
+            width=form.data['width'],
+            height=form.data['height'],
+            msPerFrame=form.data['msPerFrame'],
+            debug=form.data.get('debug') or False)
+    return (form, props)
 
 
 def is_valid_page_name(pagename):
@@ -275,11 +285,11 @@ def index():
 
 @app.route('/pages/')
 def pages_index():
-    pagenames = [
-        page for page in os.listdir("wiki") if is_valid_page_name(page)
-    ]
     return render_template(
-        "list-of-all-pages.html", pagenames=sorted(pagenames))
+        "list-of-all-pages.html",
+        pagenames=sorted([
+            page for page in os.listdir("wiki") if is_valid_page_name(page)
+        ]))
 
 
 @app.route('/pages/<PageName:pagename>/')
@@ -293,6 +303,8 @@ def page_resource(pagename, filename):
     return flask.Response(data, 200, content_type="image/png")
 
 
+# We don't need downloadable jars any more!
+'''
 @app.route('/pages/<PageName:pagename>/<_anything>.jar')
 def jar(pagename, _anything):
     """
@@ -301,14 +313,16 @@ def jar(pagename, _anything):
     browser cache.
     """
     jarfile = read_file("wiki/nifki-out/%s.jar" % (pagename,))
-    response = flask.Response(jarfile, 200, {
-        "Content-Type": "application/java-archive"})
+    response = flask.Response(
+        jarfile, 200, {"Content-Type": "application/java-archive"}
+    )
     # Mozilla refuses to cache anything without a "Last-Modified" header,
     # and ludicrously downloads a copy of the jar file for every entry
     # contained within it. Really! Top quality!
     now = datetime.datetime.now()
     response.headers["Last-Modified"] = response.headers["Date"] = now
     return response
+'''
 
 
 @app.route('/pages/<PageName:pagename>/play/')
@@ -348,33 +362,41 @@ def edit(pagename):
     # Load "properties.txt" file.
     props = GameProperties.load("wiki/%s/properties.txt" % pagename)
     # Return an editing page.
-    form = props.to_form(pagename, pagename, source)
+    form = SaveChangesSchema(pagename, strict=True).load({
+        'newpage': pagename,
+        'source': source,
+        'name': props.name,
+        'width': props.width,
+        'height': props.height,
+        'msPerFrame': props.msPerFrame,
+        'debug': 'on' if props.debug else 'off',
+    })
     return edit_page(pagename, form)
 
 
 def edit_page(pagename, form):
     """
-    Returns an edit page populated with the specified data. All fields are
-    strings except 'debug' which is a boolean. This method compiles the
-    table of images itself.
+    Returns an edit page populated with the specified data.
     """
-    return Utf8Response(render_template(
+    return render_template(
         "editing.html",
         pagename=pagename,
-        error_message=form.first_error() or '',
+        error_message=SaveChangesSchema.first_error(form) or '',
         image_list=sorted(os.listdir("wiki/%s/res" % pagename)),
-        form=form,
-        uploadedImage=''))
+        form=form.data,
+        uploadedImage='')
 
 
 @app.route('/pages/<PageName:pagename>/save/', methods=['POST'])
 def save(pagename):
-    form, props = GameProperties.check_save_changes_form(pagename)
-    newpage = form.newpage.data
-    source = form.source.data
+    form, props = check_save_changes_form(pagename)
+    newpage = form.data['newpage']
+    source = form.data['source']
     if props is None:
         return edit_page(pagename, form)
-    if form.has_upload():
+    upload = form.data.get('upload', False)
+    assert upload is True or upload is False
+    if upload:
         return upload_image(pagename, form, props)
     # Ok to save under the new name (`newpage`).
     if newpage != pagename:
@@ -402,11 +424,11 @@ def save(pagename):
 
 def upload_image(pagename, form, props):
     if props is not None:
-        assert not form.first_error()
-        image_data = form.image_data
+        assert not SaveChangesSchema.first_error(form)
         filename = request.files['uploadedImage'].filename
         filename = get_new_resource_name(pagename, filename)
-        write_file("wiki/%s/res/%s" % (pagename, filename), image_data)
+        write_file("wiki/%s/res/%s" % (pagename, filename),
+                   form.data['image_data'])
 
     return edit_page(pagename, form)
 

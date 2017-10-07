@@ -1,13 +1,11 @@
-Flask==0.10.1
-Flask-WTF==0.14.2
+# There's no point limiting ourselves to Debian's outdated versions.
+# It probably won't have a complete set of useful dependencies.
+Flask==0.12.2
+marshmallow==2.13.5
 
-# Dependencies
-appdirs==1.4.3
+# Dependencies.
+click==6.7
 itsdangerous==0.24
 Jinja2==2.9.6
 MarkupSafe==1.0
-packaging==16.8
-pyparsing==2.2.0
-six==1.10.0
 Werkzeug==0.12.2
-WTForms==2.1
