@@ -20,6 +20,7 @@ from flask import Flask, redirect, url_for, request, render_template
 from marshmallow import ValidationError
 from werkzeug.exceptions import NotFound, BadRequestKeyError
 from werkzeug.routing import UnicodeConverter
+from whitenoise import WhiteNoise
 
 
 # TODO: Make all filesystem paths absolute or use chdir.
@@ -31,6 +32,13 @@ class Utf8Response(flask.Response):
 
 app = Flask(__name__)
 app.response_class = Utf8Response
+app.wsgi_app = whitenoise = WhiteNoise(
+    app.wsgi_app,
+    root='static/public/',
+    allow_all_origins=False,
+    mimetypes={'.ico': 'image/vnd.microsoft.icon'})
+whitenoise.files['/'] = whitenoise.get_static_file(
+    'static/public-aliased/welcome-to-nifki.html', '/')
 
 def set_app_secret_key(app, filename='secret_key'):
     """Configure the SECRET_KEY from a file in the instance directory,
@@ -278,11 +286,6 @@ class PageNameConverter(UnicodeConverter):
 app.url_map.converters['PageName'] = PageNameConverter
 
 
-@app.route('/')
-def index():
-    return render_template("welcome-to-nifki.html")
-
-
 @app.route('/pages/')
 def pages_index():
     return render_template(
@@ -301,28 +304,6 @@ def page_index(pagename):
 def page_resource(pagename, filename):
     data = read_file("wiki/%s/res/%s" % (pagename, filename))
     return flask.Response(data, 200, content_type="image/png")
-
-
-# We don't need downloadable jars any more!
-'''
-@app.route('/pages/<PageName:pagename>/<_anything>.jar')
-def jar(pagename, _anything):
-    """
-    Returns the jar file for this page. Note that the requested filename is
-    completely ignored. In fact, we vary the filename in order to defeat the
-    browser cache.
-    """
-    jarfile = read_file("wiki/nifki-out/%s.jar" % (pagename,))
-    response = flask.Response(
-        jarfile, 200, {"Content-Type": "application/java-archive"}
-    )
-    # Mozilla refuses to cache anything without a "Last-Modified" header,
-    # and ludicrously downloads a copy of the jar file for every entry
-    # contained within it. Really! Top quality!
-    now = datetime.datetime.now()
-    response.headers["Last-Modified"] = response.headers["Date"] = now
-    return response
-'''
 
 
 @app.route('/pages/<PageName:pagename>/play/')
@@ -451,61 +432,6 @@ def get_new_resource_name(pagename, suggested_name):
             count += 1
         filename = proposedName
     return filename
-
-
-# --- Static file serving ---
-# "In production" we should let Apache do this instead.
-
-static_content_files = [
-    ('/nifki-lib.jar', 'nifki-lib.jar'),
-    ('/tutorial.txt', 'templates/tutorial.txt'),
-    ('/stylesheet.css', 'stylesheet.css'),
-    ('/favicon.ico', 'favicon.ico'),
-]
-for filename in os.listdir('images'):
-    static_content_files.append(
-        ('/images/%s' % filename, 'images/%s' % filename))
-
-
-def content_type_for(filename):
-    # This is used in preference to mimetypes.guess_type(),
-    # which is unlikely to do a good job.
-    ext = filename.split('.')[-1]
-    lookup = {
-        'css': 'text/css',
-        'txt': 'text/plain',
-        'ico': 'image/vnd.microsoft.icon',
-        'jar': 'application/java-archive',
-        'png': 'image/png',
-    }
-    content_type = lookup[ext]
-    # This isn't right, but it's good enough.
-    if content_type.startswith("text/"):
-        content_type += '; charset="utf-8"'
-    return content_type
-
-
-def make_static_file_endpoint(filename):
-    contents = read_file(filename)
-    endpoint = '_static_file_%d' % make_static_file_endpoint.i
-    content_type = content_type_for(filename)
-    globals_ = {'Response': flask.Response}
-    locals_ = locals().copy()
-    exec(
-        'def %s(response=Response(contents, content_type=%r)):\n'
-        '    return response\n'
-        'func = %s' % (endpoint, content_type, endpoint),
-        globals_, locals_)
-    make_static_file_endpoint.i += 1
-    app.logger.debug('Made static file handler for ' + filename)
-    return locals_['func']
-
-make_static_file_endpoint.i = 0
-
-for url_path, filename in static_content_files:
-    app.route(url_path, methods=['GET'])(make_static_file_endpoint(filename))
-
-# --- End of Static file serving ---
 
 
 app.debug = (os.getenv('DEBUG') == '1')
