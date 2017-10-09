@@ -32,13 +32,6 @@ class Utf8Response(flask.Response):
 
 app = Flask(__name__)
 app.response_class = Utf8Response
-app.wsgi_app = whitenoise = WhiteNoise(
-    app.wsgi_app,
-    root='static/public/',
-    allow_all_origins=False,
-    mimetypes={'.ico': 'image/vnd.microsoft.icon'})
-whitenoise.files['/'] = whitenoise.get_static_file(
-    'static/public-aliased/welcome-to-nifki.html', '/')
 
 def set_app_secret_key(app, filename='secret_key'):
     """Configure the SECRET_KEY from a file in the instance directory,
@@ -60,6 +53,20 @@ def set_app_secret_key(app, filename='secret_key'):
         sys.exit(msg)
 
 set_app_secret_key(app)
+
+
+# Static files
+app.wsgi_app = whitenoise = WhiteNoise(
+    app.wsgi_app,
+    root='static/public/',
+    allow_all_origins=False,
+    mimetypes={'.ico': 'image/vnd.microsoft.icon'})
+
+whitenoise.files['/'] = whitenoise.get_static_file(
+    'static/public-aliased/welcome-to-nifki.html', '/')
+
+whitenoise.add_files('../platform/html5/js/', '/js/')
+whitenoise.add_files('../platform/html5/images/', '/pages/Rocks/play/images/')
 
 
 @app.errorhandler(400)

@@ -15,17 +15,22 @@
    <br />
    <p align="center">{{ name }}</p>
    <center>
-    <applet
-      style="margin: 20px;"
-      codebase="/"
-      code="org.sc3d.apt.crazon.vm.NifkiApplet.class"
-      archive="nifki-lib.jar, pages/{{ pagename }}/{{ random }}.jar"
-      width="{{ width }}"
-      height="{{ height }}"
+    <canvas
+      id="game"
+      style="margin: 20px; width: {{ width }}px; height: {{ height }}px"
+      tabIndex="1"
     >
-     There should be a Java applet here. Please check you've got a recent
-     version of Java (at least version 1.3) installed and switched on.
-    </applet>
+      The game should be here. Perhaps JavaScript or &lt;canvas&gt; are turned off.
+    </canvas>
+    <script src="/js/table.js"></script>
+    <script src="/js/value.js"></script>
+    <script src="/js/keys.js"></script>
+    <script src="/js/ops.js"></script>
+    <script src="/js/assembler.js"></script>
+    <script src="/js/interpreter.js"></script>
+    <script src="/js/example.js"></script>
+    <script src="/js/nifki.js"></script>
+    <script>document.getElementById("game").focus();</script>
    </center>
    <table cols="2" rows="1" width="100%"><tr><td align="left">
     <a href="/pages/{{ pagename }}/edit/">Edit</a> this game.
