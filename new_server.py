@@ -128,8 +128,8 @@ class SaveChangesSchema(marshmallow.Schema):
     newpage = marshmallow.fields.String(required=True)
     upload = marshmallow.fields.Boolean(missing=False)
 
-    debug.truthy = ['on']
-    debug.falsy = ['off']
+    debug.truthy = [True, 'on']
+    debug.falsy = [False, 'off']
     upload.truthy = ['Upload']
 
     def __init__(self, pagename, strict=False):
@@ -251,7 +251,7 @@ def check_save_changes_form(pagename):
             width=form.data['width'],
             height=form.data['height'],
             msPerFrame=form.data['msPerFrame'],
-            debug=form.data.get('debug') or False)
+            debug=form.data['debug'])
     return (form, props)
 
 
@@ -326,7 +326,6 @@ def play(pagename):
             pagename=pagename,
             width=props.width,
             height=props.height,
-            random=int(time.time()),
             name=props.name)
     elif os.path.exists("wiki/nifki-out/%s.err" % pagename):
         err = read_utf8("wiki/nifki-out/%s.err" % pagename)
@@ -357,7 +356,7 @@ def edit(pagename):
         'width': props.width,
         'height': props.height,
         'msPerFrame': props.msPerFrame,
-        'debug': 'on' if props.debug else 'off',
+        'debug': props.debug,
     })
     return edit_page(pagename, form)
 
