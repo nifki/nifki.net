@@ -30,6 +30,11 @@ class Utf8Response(flask.Response):
     charset = 'utf-8'
 
 
+class Schema(marshmallow.Schema):
+    class Meta(object):
+        ordered = True  # Needed so list(schema.fields) is ordered.
+
+
 app = Flask(__name__)
 app.response_class = Utf8Response
 
@@ -115,10 +120,7 @@ def http_error(code, message):
     return Utf8Response(render_template("error.html", message=message), code)
 
 
-class SaveChangesSchema(marshmallow.Schema):
-    class Meta:
-        ordered = True  # Needed so list(schema.fields) is ordered.
-
+class SaveChangesSchema(Schema):
     name = marshmallow.fields.String()
     width = marshmallow.fields.Integer(required=True)
     height = marshmallow.fields.Integer(required=True)
@@ -130,7 +132,7 @@ class SaveChangesSchema(marshmallow.Schema):
 
     debug.truthy = [True, 'on']
     debug.falsy = [False, 'off']
-    upload.truthy = ['Upload']
+    upload.truthy = [True, 'Upload']
 
     def __init__(self, pagename, strict=False):
         super(SaveChangesSchema, self).__init__(strict=strict)
@@ -168,25 +170,22 @@ class SaveChangesSchema(marshmallow.Schema):
         for field in SaveChangesSchema.FIELDS:
             if field in form.errors:
                 error_msg = next(iter(form.errors[field]))
-                return u'{0}: {1}'.format(field, error_msg)
+                return error_msg
         if 'uploadedImage' in form.errors:
             return next(iter(form.errors['uploadedImage']))
 
 SaveChangesSchema.FIELDS = list(SaveChangesSchema('dummy').fields)
 
 
-class GamePropertiesSchema(marshmallow.Schema):
-    class Meta:
-        ordered = True
-
+class GamePropertiesSchema(Schema):
     name = marshmallow.fields.String()
     width = marshmallow.fields.Integer(missing=256)
     height = marshmallow.fields.Integer(missing=256)
     msPerFrame = marshmallow.fields.Integer(missing=40)
     debug = marshmallow.fields.Boolean(missing=False)
 
-    debug.truthy = ['true']
-    debug.falsy = ['false']
+    debug.truthy = [True, 'true']
+    debug.falsy = [False, 'false']
 
     @marshmallow.post_load
     def make_props(self, data):
@@ -363,22 +362,23 @@ def edit(pagename):
 
 def edit_page(pagename, form):
     """
-    Returns an edit page populated with the specified data.
+    Returns an edit page populated with the specified data,
+    or populated from `request.form` if `form` has errors.
     """
     return render_template(
         "editing.html",
         pagename=pagename,
         error_message=SaveChangesSchema.first_error(form) or '',
         image_list=sorted(os.listdir("wiki/%s/res" % pagename)),
-        form=form.data,
+        form=request.form if form.errors else form.data,
         uploadedImage='')
 
 
 @app.route('/pages/<PageName:pagename>/save/', methods=['POST'])
 def save(pagename):
     form, props = check_save_changes_form(pagename)
-    newpage = form.data['newpage']
-    source = form.data['source']
+    newpage = form.data.get('newpage', pagename)
+    source = form.data.get('source', '')
     if props is None:
         return edit_page(pagename, form)
     upload = form.data.get('upload', False)
