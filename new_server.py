@@ -168,7 +168,7 @@ class SaveChangesSchema(marshmallow.Schema):
         for field in SaveChangesSchema.FIELDS:
             if field in form.errors:
                 error_msg = next(iter(form.errors[field]))
-                return '{0}: {1}'.format(field, error_msg)
+                return u'{0}: {1}'.format(field, error_msg)
         if 'uploadedImage' in form.errors:
             return next(iter(form.errors['uploadedImage']))
 
@@ -213,18 +213,18 @@ class GameProperties(collections.namedtuple('GameProperties', '''
             if line and not line.startswith('#'):
                 colon = line.find(":")
                 if colon == -1:
-                    raise ValueError("Colon missing from '{0}'".format(line))
+                    raise ValueError(u"Colon missing from '{0}'".format(line))
                 key, value = line[:colon], line[colon + 1:]
                 data[key] = value.strip()
         return GamePropertiesSchema(strict=True).load(data).data
 
     def save(self, filename):
         file_contents = (
-            'name: {name}\n'
-            'width: {width}\n'
-            'height: {height}\n'
-            'msPerFrame: {msPerFrame}\n'
-            'debug: {debug}\n'
+            u'name: {name}\n'
+            u'width: {width}\n'
+            u'height: {height}\n'
+            u'msPerFrame: {msPerFrame}\n'
+            u'debug: {debug}\n'
         ).format(
             name=self.name,
             width=self.width,
