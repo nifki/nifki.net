@@ -19,6 +19,11 @@
       id="game"
       style="margin: 20px; width: {{ width }}px; height: {{ height }}px"
       tabIndex="1"
+      data-name="{{ pagename }}"
+      data-width="{{ width }}"
+      data-height="{{ height }}"
+      data-msPerFrame="{{ msPerFrame }}"
+      data-resources="{{ resources | join(',') }}"
     >
       The game should be here. Perhaps JavaScript or &lt;canvas&gt; are turned off.
     </canvas>
@@ -28,7 +33,7 @@
     <script src="/js/ops.js"></script>
     <script src="/js/assembler.js"></script>
     <script src="/js/interpreter.js"></script>
-    <script src="/js/example.js"></script>
+    <script src="source.js"></script>
     <script src="/js/nifki.js"></script>
     <script>document.getElementById("game").focus();</script>
    </center>

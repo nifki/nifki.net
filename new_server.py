@@ -12,6 +12,7 @@ import subprocess
 import sys
 import textwrap
 import time
+import zipfile
 
 import flask
 import marshmallow
@@ -71,7 +72,6 @@ whitenoise.files['/'] = whitenoise.get_static_file(
     'static/public-aliased/welcome-to-nifki.html', '/')
 
 whitenoise.add_files('../platform/html5/js/', '/js/')
-whitenoise.add_files('../platform/html5/images/', '/pages/Rocks/play/images/')
 
 
 @app.errorhandler(400)
@@ -200,14 +200,15 @@ class GameProperties(collections.namedtuple('GameProperties', '''
     debug
 ''')):
     @staticmethod
-    def load(filename):
+    def load(properties_txt):
         """
         Parses a file of the form of "properties.txt" and returns its contents
         as a GameProperties. This is used, for example, to retrieve the width
         and height of a game for inclusion in the applet tag.
+         - properties_txt - the contents of the file.
         """
         data = {}
-        for line in read_utf8(filename).split("\n"):
+        for line in properties_txt.split("\n"):
             line = line.strip()
             if line and not line.startswith('#'):
                 colon = line.find(":")
@@ -302,14 +303,8 @@ def pages_index():
 
 
 @app.route('/pages/<PageName:pagename>/')
-def page_index(pagename):
+def page_index_redirect(pagename):
     return redirect("/pages/%s/play/" % pagename)
-
-
-@app.route('/pages/<PageName:pagename>/res/<PageName:filename>')
-def page_resource(pagename, filename):
-    data = read_file("wiki/%s/res/%s" % (pagename, filename))
-    return flask.Response(data, 200, content_type="image/png")
 
 
 @app.route('/pages/<PageName:pagename>/play/')
@@ -320,12 +315,20 @@ def play(pagename):
     or redirects to the edit page if the compiler hasn't run for this game.
     """
     if os.path.exists("wiki/nifki-out/%s.jar" % pagename):
-        props = GameProperties.load("wiki/%s/properties.txt" % pagename)
+        with zipfile.ZipFile("wiki/nifki-out/%s.jar" % pagename) as jar:
+            properties_txt = jar.open(
+                "org/sc3d/apt/crazon/gamedata/properties.txt").read()
+            resources_txt = jar.open(
+                "org/sc3d/apt/crazon/gamedata/resources.txt").read()
+        props = GameProperties.load(properties_txt)
         return render_template("playing.html",
             pagename=pagename,
             width=props.width,
             height=props.height,
-            name=props.name)
+            msPerFrame=props.msPerFrame,
+            name=props.name,
+            resources=resources_txt.splitlines(),
+        )
     elif os.path.exists("wiki/nifki-out/%s.err" % pagename):
         err = read_utf8("wiki/nifki-out/%s.err" % pagename)
         lines = []
@@ -339,6 +342,27 @@ def play(pagename):
         return redirect(url_for('edit', pagename=pagename))
 
 
+# TODO: Delete once the JS can read "<...>/play/asm.nfk".
+@app.route('/pages/<PageName:pagename>/play/source.js')
+def game_source_js(pagename):
+    with zipfile.ZipFile("wiki/nifki-out/%s.jar" % pagename) as jar:
+        asm = jar.open("org/sc3d/apt/crazon/gamedata/asm.nfk").read()
+    # The BOM is needed to imply the charset, since JS has non-text MIME type.
+    js = u'''\uFEFFvar TEST_CODE = '%s';''' % asm.encode('string_escape')
+    return flask.Response(js, 200, content_type="application/javascript")
+
+
+@app.route('/pages/<PageName:pagename>/play/<filename>')
+def game_resource(pagename, filename):
+    with zipfile.ZipFile("wiki/nifki-out/%s.jar" % pagename) as jar:
+        data = jar.open("org/sc3d/apt/crazon/gamedata/%s" % filename).read()
+    if filename in ['asm.nfk', 'resources.txt', 'properties.txt']:
+        content_type = "text/plain"
+    else:
+        content_type = "image/png"
+    return flask.Response(data, 200, content_type=content_type)
+
+
 @app.route('/pages/<PageName:pagename>/edit/')
 def edit(pagename):
     if not os.path.isdir("wiki/%s/" % pagename):
@@ -346,7 +370,8 @@ def edit(pagename):
     # Load "source.sss" file.
     source = read_utf8("wiki/%s/source.sss" % pagename)
     # Load "properties.txt" file.
-    props = GameProperties.load("wiki/%s/properties.txt" % pagename)
+    props = GameProperties.load(
+        read_utf8("wiki/%s/properties.txt" % pagename))
     # Return an editing page.
     form = SaveChangesSchema(pagename, strict=True).load({
         'newpage': pagename,
@@ -372,6 +397,12 @@ def edit_page(pagename, form):
         image_list=sorted(os.listdir("wiki/%s/res" % pagename)),
         form=request.form if form.errors else form.data,
         uploadedImage='')
+
+
+@app.route('/pages/<PageName:pagename>/res/<PageName:filename>')
+def page_resource(pagename, filename):
+    data = read_file("wiki/%s/res/%s" % (pagename, filename))
+    return flask.Response(data, 200, content_type="image/png")
 
 
 @app.route('/pages/<PageName:pagename>/save/', methods=['POST'])
