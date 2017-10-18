@@ -198,8 +198,7 @@ class SaveChangesFormData(object):
         self.source = source
         self.newpage = newpage
         self.upload = upload
-        self.image_filename = None
-        self.image_data = None
+        self.uploaded_image = None
 
     def to_form_dict(self):
         return dict(
@@ -208,6 +207,35 @@ class SaveChangesFormData(object):
             newpage=self.newpage,
             upload=self.upload,
         )
+
+
+class UploadedImage(object):
+    def __init__(self, suggested_filename, data):
+        self.suggested_filename = suggested_filename
+        self.data = data
+
+    def save(self, pagename):
+        filename = self._get_new_resource_name(pagename)
+        write_file("wiki/%s/res/%s" % (pagename, filename), self.data)
+
+    def _get_new_resource_name(self, pagename):
+        filename = os.path.basename(self.suggested_filename)
+        if filename.endswith(".png") or filename.endswith(".PNG"):
+            filename = filename[:-4]
+        allowed = string.ascii_letters + string.digits
+        filename = "".join([x for x in filename if x in allowed])
+        if not is_valid_page_name(filename):  # TODO: Just reject it?
+            filename = "image"
+        existingNames = os.listdir("wiki/%s/res/" % pagename)
+        if filename in existingNames:
+            count = 1
+            while True:
+                proposedName = "%s%d" % (filename, count)
+                if proposedName not in existingNames:
+                    break
+                count += 1
+            filename = proposedName
+        return filename
 
 
 class GamePropertiesSchema(Schema):
@@ -273,8 +301,10 @@ def check_save_changes_form(pagename):
     form = schema.load(request.form)
     if not form.errors and form.data.upload:
         try:
-            form.data.image_filename = request.files['uploadedImage'].filename
-            form.data.image_data = schema.validate_uploadedImage()
+            form.data.uploaded_image = UploadedImage(
+                request.files['uploadedImage'].filename,
+                schema.validate_uploadedImage(),
+            )
         except ValidationError as e:
             form.errors['uploadedImage'] = [e]
     return form
@@ -438,7 +468,10 @@ def save(pagename):
     upload = form.data.upload
     assert upload is True or upload is False
     if upload:
-        return upload_image(pagename, form)
+        # Upload image.
+        form.data.uploaded_image.save(pagename)
+        # FIXME: Other changes are not saved!
+        return edit_page(pagename, form)
     # Ok to save under the new name (`newpage`).
     newpage = form.data.newpage
     source = form.data.source
@@ -449,48 +482,27 @@ def save(pagename):
     write_utf8("wiki/%s/source.sss" % newpage, source)
     # Save the properties file, 'properties.txt'.
     form.data.properties.save("wiki/%s/properties.txt" % newpage)
-    # Run the compiler. We capture its output to avoid writing to stdout:
-    # http://blog.dscpl.com.au/2009/04/wsgi-and-printing-to-standard-output.html
+    if run_compiler(newpage):
+        return redirect(url_for('play', pagename=newpage))
+    else:
+        return Utf8Response(render_template("compiler-error.html"), 500)
+
+
+def run_compiler(pagename):
+    '''
+    Run the compiler. We capture its output to avoid writing to stdout:
+    http://blog.dscpl.com.au/2009/04/wsgi-and-printing-to-standard-output.html
+    '''
+    assert is_valid_page_name(pagename)
     p = subprocess.Popen(
-        "java -jar compiler.jar wiki %s" % newpage,
+        "java -jar compiler.jar wiki %s" % pagename,
         shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     compiler_stdout, compiler_stderr = p.communicate()
     app.logger.info(compiler_stdout)  # "Wrote somefile."
     if compiler_stderr:
         # This is for actually-didn't-run errors, not source code errors.
         app.logger.error(compiler_stderr)
-    if p.returncode != 0:
-        return Utf8Response(render_template("compiler-error.html"), 500)
-    else:
-        return redirect(url_for('play', pagename=newpage))
-
-
-def upload_image(pagename, form):
-    assert not form.errors
-    assert not SaveChangesSchema.first_error(form)
-    filename = get_new_resource_name(pagename, form.data.image_filename)
-    write_file("wiki/%s/res/%s" % (pagename, filename), form.data.image_data)
-    return edit_page(pagename, form)
-
-
-def get_new_resource_name(pagename, suggested_name):
-    filename = os.path.basename(suggested_name)
-    if filename.endswith(".png") or filename.endswith(".PNG"):
-        filename = filename[:-4]
-    allowed = string.ascii_letters + string.digits
-    filename = "".join([x for x in filename if x in allowed])
-    if not is_valid_page_name(filename):  # TODO: Just reject it?
-        filename = "image"
-    existingNames = os.listdir("wiki/%s/res/" % pagename)
-    if filename in existingNames:
-        count = 1
-        while True:
-            proposedName = "%s%d" % (filename, count)
-            if proposedName not in existingNames:
-                break
-            count += 1
-        filename = proposedName
-    return filename
+    return p.returncode == 0
 
 
 app.debug = (os.getenv('DEBUG') == '1')
