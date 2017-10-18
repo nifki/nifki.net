@@ -437,25 +437,7 @@ def edit(pagename):
         'msPerFrame': props.msPerFrame,
         'debug': props.debug,
     })
-    return edit_page(pagename, form)
-
-
-def edit_page(pagename, form):
-    """
-    Returns an edit page populated with the specified data,
-    or populated from `request.form` if `form` has errors.
-    """
-    data = {
-        'pagename': pagename,
-        'image_list': sorted(os.listdir("wiki/%s/res" % pagename)),
-    }
-    if form.errors:
-        data['form'] = request.form
-        data['error_message'] = SaveChangesSchema.first_error(form)
-    else:
-        data['form'] = form.data.to_form_dict()
-        data['error_message'] = ''
-    return render_template("editing.html", **data)
+    return edit_page(pagename, form.data)
 
 
 @app.route('/pages/<PageName:pagename>/res/<PageName:filename>')
@@ -464,28 +446,59 @@ def page_resource(pagename, filename):
     return flask.Response(data, 200, content_type="image/png")
 
 
+class EditPage(object):
+    def __init__(self, pagename, form_dict, error_message=''):
+        self.pagename = pagename
+        self.form_dict = form_dict
+        self.error_message = error_message
+
+    def render(self):
+        data = {
+            'pagename': self.pagename,
+            'image_list': sorted(os.listdir("wiki/%s/res" % self.pagename)),
+            'form': self.form_dict,
+            'error_message': self.error_message,
+        }
+        return render_template("editing.html", **data)
+
+
+def edit_page(pagename, form_data):
+    return EditPage(pagename, form_data.to_form_dict()).render()
+
+
 @app.route('/pages/<PageName:pagename>/save/', methods=['POST'])
-def save(pagename):
+def save_page(pagename):
     form = check_save_changes_form(pagename)
     if form.errors:
-        return edit_page(pagename, form)
-    upload = form.data.upload
-    assert upload is True or upload is False
-    if upload:
+        error_message = SaveChangesSchema.first_error(form)
+        return EditPage(pagename, request.form, error_message).render()
+    else:
+        return do_save(pagename, form.data)
+
+
+def do_save(pagename, form_data):
+    assert isinstance(form_data, SaveChangesFormData)
+    assert isinstance(form_data.upload, bool)
+
+    if form_data.upload:
         # Upload image.
-        form.data.uploaded_image.save(pagename)
+        form_data.uploaded_image.save(pagename)
         # FIXME: Other changes are not saved!
-        return edit_page(pagename, form)
+        return edit_page(pagename, form_data)
+
     # Ok to save under the new name (`newpage`).
-    newpage = form.data.newpage
-    source = form.data.source
+    newpage = form_data.newpage
+    source = form_data.source
     if newpage != pagename:
         # New page.
         shutil.copytree("wiki/%s/" % pagename, "wiki/%s/" % newpage)
+
     # Save the source file, 'source.sss'.
     write_utf8("wiki/%s/source.sss" % newpage, source)
+
     # Save the properties file, 'properties.txt'.
-    form.data.properties.save("wiki/%s/properties.txt" % newpage)
+    form_data.properties.save("wiki/%s/properties.txt" % newpage)
+
     # Run the compiler.
     if run_compiler(newpage):
         return redirect(url_for('play', pagename=newpage))
