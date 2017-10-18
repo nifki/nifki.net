@@ -445,13 +445,17 @@ def edit_page(pagename, form):
     Returns an edit page populated with the specified data,
     or populated from `request.form` if `form` has errors.
     """
-    return render_template(
-        "editing.html",
-        pagename=pagename,
-        error_message=SaveChangesSchema.first_error(form) or '',
-        image_list=sorted(os.listdir("wiki/%s/res" % pagename)),
-        form=request.form if form.errors else form.data.to_form_dict(),
-        uploadedImage='')
+    data = {
+        'pagename': pagename,
+        'image_list': sorted(os.listdir("wiki/%s/res" % pagename)),
+    }
+    if form.errors:
+        data['form'] = request.form
+        data['error_message'] = SaveChangesSchema.first_error(form)
+    else:
+        data['form'] = form.data.to_form_dict()
+        data['error_message'] = ''
+    return render_template("editing.html", **data)
 
 
 @app.route('/pages/<PageName:pagename>/res/<PageName:filename>')
@@ -482,6 +486,7 @@ def save(pagename):
     write_utf8("wiki/%s/source.sss" % newpage, source)
     # Save the properties file, 'properties.txt'.
     form.data.properties.save("wiki/%s/properties.txt" % newpage)
+    # Run the compiler.
     if run_compiler(newpage):
         return redirect(url_for('play', pagename=newpage))
     else:
