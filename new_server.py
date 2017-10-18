@@ -174,17 +174,40 @@ class SaveChangesSchema(Schema):
         if 'uploadedImage' in form.errors:
             return next(iter(form.errors['uploadedImage']))
 
-    @staticmethod
-    def get_properties(form):
-        assert not form.errors
-        return GameProperties(
-            name=form.data['name'],
-            width=form.data['width'],
-            height=form.data['height'],
-            msPerFrame=form.data['msPerFrame'],
-            debug=form.data['debug'])
+    @marshmallow.post_load
+    def make_result(self, data):
+        return SaveChangesFormData(
+            properties=GameProperties(
+                name=data['name'],
+                width=data['width'],
+                height=data['height'],
+                msPerFrame=data['msPerFrame'],
+                debug=data['debug'],
+            ),
+            source=data['source'],
+            newpage=data['newpage'],
+            upload=data['upload'],
+        )
 
 SaveChangesSchema.FIELDS = list(SaveChangesSchema('dummy').fields)
+
+
+class SaveChangesFormData(object):
+    def __init__(self, properties, source, newpage, upload):
+        self.properties = properties
+        self.source = source
+        self.newpage = newpage
+        self.upload = upload
+        self.image_filename = None
+        self.image_data = None
+
+    def to_form_dict(self):
+        return dict(
+            self.properties._asdict(),
+            source=self.source,
+            newpage=self.newpage,
+            upload=self.upload,
+        )
 
 
 class GamePropertiesSchema(Schema):
@@ -198,7 +221,7 @@ class GamePropertiesSchema(Schema):
     debug.falsy = [False, 'false']
 
     @marshmallow.post_load
-    def make_props(self, data):
+    def make_result(self, data):
         return GameProperties(**data)
 
 
@@ -248,9 +271,10 @@ class GameProperties(collections.namedtuple('GameProperties', '''
 def check_save_changes_form(pagename):
     schema = SaveChangesSchema(pagename, strict=False)
     form = schema.load(request.form)
-    if not form.errors and form.data['upload']:
+    if not form.errors and form.data.upload:
         try:
-            form.data['image_data'] = schema.validate_uploadedImage()
+            form.data.image_filename = request.files['uploadedImage'].filename
+            form.data.image_data = schema.validate_uploadedImage()
         except ValidationError as e:
             form.errors['uploadedImage'] = [e]
     return form
@@ -396,7 +420,7 @@ def edit_page(pagename, form):
         pagename=pagename,
         error_message=SaveChangesSchema.first_error(form) or '',
         image_list=sorted(os.listdir("wiki/%s/res" % pagename)),
-        form=request.form if form.errors else form.data,
+        form=request.form if form.errors else form.data.to_form_dict(),
         uploadedImage='')
 
 
@@ -409,23 +433,22 @@ def page_resource(pagename, filename):
 @app.route('/pages/<PageName:pagename>/save/', methods=['POST'])
 def save(pagename):
     form = check_save_changes_form(pagename)
-    newpage = form.data.get('newpage', pagename)
-    source = form.data.get('source', '')
     if form.errors:
         return edit_page(pagename, form)
-    upload = form.data.get('upload', False)
+    upload = form.data.upload
     assert upload is True or upload is False
     if upload:
         return upload_image(pagename, form)
     # Ok to save under the new name (`newpage`).
+    newpage = form.data.newpage
+    source = form.data.source
     if newpage != pagename:
         # New page.
         shutil.copytree("wiki/%s/" % pagename, "wiki/%s/" % newpage)
     # Save the source file, 'source.sss'.
     write_utf8("wiki/%s/source.sss" % newpage, source)
     # Save the properties file, 'properties.txt'.
-    props = SaveChangesSchema.get_properties(form)
-    props.save("wiki/%s/properties.txt" % newpage)
+    form.data.properties.save("wiki/%s/properties.txt" % newpage)
     # Run the compiler. We capture its output to avoid writing to stdout:
     # http://blog.dscpl.com.au/2009/04/wsgi-and-printing-to-standard-output.html
     p = subprocess.Popen(
@@ -445,10 +468,8 @@ def save(pagename):
 def upload_image(pagename, form):
     assert not form.errors
     assert not SaveChangesSchema.first_error(form)
-    filename = request.files['uploadedImage'].filename
-    filename = get_new_resource_name(pagename, filename)
-    write_file("wiki/%s/res/%s" % (pagename, filename),
-               form.data['image_data'])
+    filename = get_new_resource_name(pagename, form.data.image_filename)
+    write_file("wiki/%s/res/%s" % (pagename, filename), form.data.image_data)
     return edit_page(pagename, form)
 
 
