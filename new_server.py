@@ -296,20 +296,6 @@ class GameProperties(collections.namedtuple('GameProperties', '''
         write_utf8(filename, file_contents)
 
 
-def check_save_changes_form(pagename):
-    schema = SaveChangesSchema(pagename, strict=False)
-    form = schema.load(request.form)
-    if not form.errors and form.data.upload:
-        try:
-            form.data.uploaded_image = UploadedImage(
-                request.files['uploadedImage'].filename,
-                schema.validate_uploadedImage(),
-            )
-        except ValidationError as e:
-            form.errors['uploadedImage'] = [e]
-    return form
-
-
 def is_valid_page_name(pagename):
     """
     Page names must start with a letter, must contain only letters and
@@ -474,6 +460,20 @@ def save_page(pagename):
         return EditPage(pagename, request.form, error_message).render()
     else:
         return do_save(pagename, form.data)
+
+
+def check_save_changes_form(pagename):
+    schema = SaveChangesSchema(pagename, strict=False)
+    form = schema.load(request.form)
+    if not form.errors and form.data.upload:
+        try:
+            form.data.uploaded_image = UploadedImage(
+                request.files['uploadedImage'].filename,
+                schema.validate_uploadedImage(),
+            )
+        except ValidationError as e:
+            form.errors['uploadedImage'] = [e]
+    return form
 
 
 def do_save(pagename, form_data):
